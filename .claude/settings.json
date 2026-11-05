@@ -1,0 +1,17 @@
+{
+  "model": "claude-opus-5-5",
+  "modelSettings": {
+    "claude-opus-5-5": { "effortLevel": "high" }
+  },
+  "permissions": {
+    "allow": [
+      "Bash(git diff:*)",
+      "Bash(git log:*)",
+      "Bash(git status:*)",
+      "Bash(git branch:*)",
+      "Bash(pnpm build:*)",
+      "Bash(pnpm typegen:*)",
+      "Bash(pnpm lint:*)"
+    ]
+  }
+}
