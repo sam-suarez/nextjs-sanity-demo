@@ -22,6 +22,7 @@ and the seed dataset imported. Nothing on the public site yet beyond a placehold
 - Custom `DifficultyInput` component for the difficulty field.
 - Structure Builder config matching the structure in the content model.
 - Seed data as NDJSON plus an import script, imported into the dataset.
+- Vitest set up per Testing in `00-overview.md`, with `src/lib/rules.ts` and its unit tests.
 - `.env.local.example` listing every variable from the overview.
 - `README.md` with setup steps.
 
@@ -33,7 +34,7 @@ and the seed dataset imported. Nothing on the public site yet beyond a placehold
 pnpm create next-app@latest . --typescript --tailwind --eslint --app --src-dir --import-alias "@/*"
 pnpm dlx shadcn@latest init
 pnpm add next-sanity @sanity/image-url @sanity/client sanity @sanity/vision styled-components
-pnpm add -D @sanity/cli
+pnpm add -D @sanity/cli vitest
 ```
 
 Record the exact Next.js and Sanity versions that get installed at the top of the README.
@@ -73,11 +74,43 @@ a CORS origin with credentials allowed in the Sanity project settings. This is a
 - Validation rules as written in the content model. Use `Rule.required()`, `Rule.min()`,
   `Rule.max()`, `Rule.positive()`, `Rule.integer()`, `Rule.precision(1)` on `distanceKm`,
   a custom rule on `related` to reject a self-reference, and a custom rule on
-  `tripReport.hikedOn` to reject future dates.
+  `tripReport.hikedOn` to reject future dates. Both custom rules and the `tripReport`
+  limits come from `src/lib/rules.ts` (below).
 - Defaults via `initialValue`: `dogsAllowed: true`, `featured: false`,
   `tripReport.status: "pending"`, `trailCondition.reportedAt` set to the current time.
 - `tripReport.status` stays editable in phase 1. Phase 5 sets `readOnly: true` once the
   approve and reject document actions exist.
+
+### Shared rules
+
+`src/lib/rules.ts` holds the limits and checks that both the Studio and the site enforce,
+so the two cannot drift. It follows the Testing rules in `00-overview.md` (pure, no imports
+from Next.js or Sanity).
+
+- `TRIP_REPORT_LIMITS`: `authorName` max 60, `body` 20 to 1000 characters, `rating` 1 to 5,
+  at most 3 photos, 5 MB per photo. The `tripReport` schema uses these now; the phase 5
+  Zod schema and form use them too.
+- `isSelfReference(documentId, refs)`: true when any `_ref` in `refs` equals `documentId`
+  with a leading `drafts.` removed. The Studio validates the draft (`drafts.trail-…`),
+  while references point at the published ID. `refs` may be `undefined`.
+- `isFutureDate(date, today)`: both are `YYYY-MM-DD` strings; true when `date` is after
+  `today`. The schema rule passes today's date in the editor's local time.
+
+Schema files import it with a relative path, not `@/`, so it resolves the same way in
+Next.js and in the Sanity CLI (`schema extract`, `typegen`).
+
+### Unit tests
+
+`vitest.config.ts` at the root sets the `node` environment, the include globs from
+Testing in `00-overview.md`, and resolves the `@/*` alias to `src/*` (the researcher
+confirms the current way to do this). Test files must type-check under `pnpm build`.
+
+`src/lib/rules.test.ts` covers at least:
+
+- `isSelfReference`: the published ID in `refs` is true; a draft ID (`drafts.trail-a`)
+  with `trail-a` in `refs` is true; only other IDs is false; `undefined` and `[]` are false.
+- `isFutureDate`: yesterday and today are false, tomorrow is true, and it holds across a
+  month and a year boundary (`2026-12-31` vs `2027-01-01`).
 
 ### Custom input
 
@@ -110,6 +143,7 @@ red) using `@sanity/ui`. It receives the standard `StringInputProps` and calls
 | `build` | `next build` |
 | `seed` | `sanity dataset import sanity/seed/data.ndjson production --replace` |
 | `typegen` | `sanity schema extract && sanity typegen generate` |
+| `test` | `TZ=America/Edmonton vitest run` |
 
 `typegen` is used from phase 2 onwards.
 
@@ -139,3 +173,5 @@ the statement "Trailhead" in the display face with an `Underline`, and a primary
 - Vision returns 12 results for `*[_type == "trail"]{name, "region": region->name}`, every
   one with a non-null `region`.
 - The hex and small-text greps in the `08-design-system.md` acceptance checks pass.
+- The checks under Testing in `00-overview.md` pass, and `pnpm test` runs
+  `src/lib/rules.test.ts`.

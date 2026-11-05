@@ -28,4 +28,5 @@ Tailwind + shadcn themed as the "Sketch" paper design system, MapLibre maps, Ver
 
 ## Commands
 
-`pnpm dev`, `pnpm build`, `pnpm typegen`, `pnpm seed` (defined in phase 1).
+`pnpm dev`, `pnpm build`, `pnpm typegen`, `pnpm seed`, `pnpm test` (defined in phase 1).
+Unit tests only; the rules are under Testing in `docs/spec/00-overview.md`.

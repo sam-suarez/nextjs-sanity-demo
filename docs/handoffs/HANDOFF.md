@@ -11,7 +11,8 @@ No code exists. Specs live in `docs/spec/`. Nothing is committed yet.
 
 Run `/build-phase 1`. The phase 1 researcher must also cover the "Flag for researcher" items in
 `docs/handoffs/spec-review/spec-review.md` that touch phase 1 (Next 16 APIs, TypeGen config,
-`SanityLive`/`VisualEditing` placement, perspective names, shadcn `form` vs `field`).
+`SanityLive`/`VisualEditing` placement, perspective names, shadcn `form` vs `field`), plus
+the current Vitest version and how `vitest.config.ts` resolves the `@/*` alias.
 
 ## Phase table
 
@@ -36,4 +37,7 @@ None yet.
 - Design system spec (08) overrides earlier phase files where they conflict.
 - `src/lib/og-tokens.ts` is the only file besides `globals.css` allowed raw hex (OG images; in CLAUDE.md).
 - Each phase merges to `main` before the next begins. Nothing is pushed by agents.
+- Unit tests (Vitest, pure logic only) added to the spec on 2026-11-04, after the spec review. Rules
+  under Testing in `docs/spec/00-overview.md`; required cases under "Unit tests" in each phase file.
+  No end-to-end or component tests.
 - Orchestrator runs on Opus 5.5 high. Reviewer and architect on Opus 5.5 high. Implementer on Sonnet 5.5 high (Opus for phases 4 and 6). QA and scribe on Haiku 5.5.

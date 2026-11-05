@@ -23,7 +23,9 @@ produced it, and publishing updates the static site within seconds without a reb
   `next-sanity/draft-mode` with a client that carries `SANITY_API_READ_TOKEN`. The helper
   validates the secret the Presentation tool sends and enables draft mode.
 - `src/app/api/draft-mode/disable/route.ts` calls `(await draftMode()).disable()` and
-  redirects to the referrer or `/`.
+  redirects to `safeRedirectPath(referer, origin)` from `src/lib/redirect.ts`: the
+  referrer's path and query when it has the request's origin, otherwise `/`. A cross-origin
+  or malformed referrer never becomes the redirect target.
 - `sanityFetch` already switches to `previewDrafts` perspective and disables the CDN
   when draft mode is on. No page changes needed.
 
@@ -74,6 +76,9 @@ Move the Presentation tool first in the plugin list so it is the default Studio 
     projection below), so it revalidates `trail:<slug>`.
   - Responds 401 when the signature is invalid, 400 when `_type` is missing, and 200 with
     the list of revalidated tags otherwise.
+  - The tag list comes from a pure `revalidationTags(body)` in `src/lib/revalidate.ts`,
+    which returns `null` when `_type` is missing or empty (the 400 case). The route handler
+    only verifies, calls it, and calls `revalidateTag` for each tag.
 - Create the webhook in the Sanity project management UI (or with the CLI) with:
   - URL `https://<site>/api/revalidate`
   - Trigger on create, update, delete
@@ -98,6 +103,23 @@ These are human steps; agents never push or touch dashboards.
 Every `sanityFetch` call from phase 2 and 3 already passes tags. Confirm each call matches
 the tag matrix in `03-phase-2-core-pages.md` (Pages section) and fix any that do not.
 
+### Unit tests
+
+Per Testing in `00-overview.md`. At least:
+
+- `src/lib/revalidate.test.ts`
+  - `trail` with slug `grassi-lakes` gives `["trail", "trail:grassi-lakes"]`; without a
+    slug, `["trail"]`. The same two cases for `region`.
+  - `trailCondition` and `tripReport` with slug `grassi-lakes` give
+    `[<type>, "trail:grassi-lakes"]`; without a slug, `[<type>]`.
+  - `siteSettings` gives `["siteSettings"]`.
+  - A missing or empty `_type`, and a `null` body, give `null`.
+- `src/lib/redirect.test.ts`
+  - A same-origin referrer `https://site.test/trails/grassi-lakes?x=1` gives
+    `/trails/grassi-lakes?x=1`.
+  - A referrer on another origin, a `null` referrer, and a malformed one give `/`.
+  - A same-host referrer on a different scheme or port gives `/`.
+
 ## Acceptance checks
 
 - Opening the Grassi Lakes trail in the Presentation tool shows the site in the preview
@@ -115,3 +137,5 @@ the tag matrix in `03-phase-2-core-pages.md` (Pages section) and fix any that do
 - The draft banner is absent on the public site, present in the Presentation preview, and
   its "Exit" link returns to the page with draft mode off (banner gone).
 - The hex and small-text greps in the `08-design-system.md` acceptance checks pass.
+- The checks under Testing in `00-overview.md` pass, and `pnpm test` runs the two test
+  files above plus those of phases 1 and 3.

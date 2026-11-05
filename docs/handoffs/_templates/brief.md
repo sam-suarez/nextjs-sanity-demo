@@ -26,6 +26,8 @@ Logins, tokens, dashboard config the user must do first. "None" if none.
 | # | Command | Expected |
 | --- | --- | --- |
 | 1 | `pnpm build` | exit 0, no type errors |
+| 2 | `pnpm test` | exit 0; runs this phase's and every earlier phase's test files |
+| 3 | `grep -rnF -e ".skip(" -e ".only(" -e ".todo(" src sanity --include='*.test.ts'` | no output |
 
 ## Manual checks
 Exact steps a human follows, one per line.

@@ -53,6 +53,8 @@ the trail list can be filtered by region, difficulty, and distance.
 - `src/app/sitemap.ts` lists `/`, `/trails`, `/regions`, plus every trail and region URL
   with `_updatedAt` as `lastModified`, as absolute URLs on `NEXT_PUBLIC_SITE_URL`. Report
   pages are not listed. Add a `sitemapQuery` returning `slug` and `_updatedAt` for both types.
+  The entries are built by a pure `sitemapEntries(siteUrl, { trails, regions })` in
+  `src/lib/sitemap.ts`; `sitemap.ts` fetches and calls it.
 - `src/app/robots.ts` allows everything except `/studio` and `/api`.
 
 ### OG images
@@ -76,7 +78,9 @@ The layout follows the OG paragraph in the Images section of `08-design-system.m
   from `src/lib/og-tokens.ts`, created in this phase as described in the Images section of
   `08-design-system.md`. It mirrors the `--dp-color-*` hex values the cards use, is the one
   file exempt from the "no hex outside `globals.css`" rule, and must stay in sync with
-  `globals.css`. The OG files themselves contain no hex.
+  `globals.css`. The OG files themselves contain no hex. Its keys are the camelCase token
+  names (`ground`, `ink`, `pencilGreen`), so the unit test below can match each key to
+  `--dp-color-<kebab-case key>`.
 
 ### Filters
 
@@ -109,6 +113,13 @@ Zod schema in `src/lib/trail-filters.ts` (`pnpm add zod`) that also exports
 `toSearchParams` for the UI. `difficulty` values outside the four enum values and a
 non-positive `maxKm` are dropped, not errors.
 
+`parseTrailFilters(searchParams)` returns `{ region, difficulties, maxKm, sort }`, with
+`null` for each unset filter and `sort` defaulting to `"name"`; the first three go straight
+to the query as `$region`, `$difficulties`, and `$maxKm`. A param given more than once (a
+`string[]`) uses its first value. Repeated difficulty values are removed, and a list with
+no valid values becomes `null`. `toSearchParams(filters)` omits `null` filters and the
+default sort.
+
 UI:
 
 - `FilterBar` is a client component. Region `Select` (options from `regionsQuery`, slugs
@@ -124,6 +135,28 @@ UI:
 
 Because the page depends on search params it is rendered on demand. The `sanityFetch`
 cache still applies per unique query, so repeated filters are cheap.
+
+### Unit tests
+
+Per Testing in `00-overview.md`. At least:
+
+- `src/lib/trail-filters.test.ts`
+  - No params gives every filter `null` and `sort` `"name"`.
+  - All four valid params parse; `maxKm=10` becomes the number `10`.
+  - Unknown params (`foo=bar`) are ignored.
+  - `difficulty=easy,nope,easy,hard` gives `["easy", "hard"]`; `difficulty=nope` gives `null`.
+  - `maxKm` of `0`, `-5`, `abc`, and the empty string each give `null`.
+  - `sort=elevation` gives `"name"`.
+  - `region: ["a", "b"]` gives `"a"`.
+  - `toSearchParams` omits `null` filters and `sort=name`, and
+    `parseTrailFilters(toSearchParams(f))` equals `f` for an empty and a full filter.
+- `src/lib/sitemap.test.ts`
+  - Two trails and one region give 6 entries: the 3 static routes, then one per document.
+  - Every `url` is absolute on `siteUrl`, with no double slash when `siteUrl` ends in `/`.
+  - Document entries take `lastModified` from `_updatedAt`.
+- `src/lib/og-tokens.test.ts`: reads `src/app/globals.css` from disk; for each key in
+  `og-tokens.ts`, the matching `--dp-color-*` token exists and has the same hex value
+  (case-insensitive). This is how the sync rule in 08 is checked.
 
 ## Acceptance checks
 
@@ -152,4 +185,6 @@ table in `01-content-model.md` as verified in phase 1.
   skeleton grid before the new results appear, never a blank area.
 - The hex and small-text greps in the `08-design-system.md` acceptance checks pass (the hex
   grep exempts exactly `src/lib/og-tokens.ts`), and each hex value in `og-tokens.ts` equals
-  the matching `--dp-color-*` value in `src/app/globals.css`.
+  the matching `--dp-color-*` value in `src/app/globals.css` (checked by `og-tokens.test.ts`).
+- The checks under Testing in `00-overview.md` pass, and `pnpm test` runs the three test
+  files above plus phase 1's.

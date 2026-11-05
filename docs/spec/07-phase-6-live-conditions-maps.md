@@ -30,8 +30,12 @@ trailhead and every region page has a clustered map of its trails.
   `caution`, accent outline for `closed`). Shows the headline, details, and
   "Reported <relative time>". Relative time is a small client component so it ticks
   without a refetch: it renders `<time dateTime={reportedAt}>`, computes the relative text
-  with `Intl.RelativeTimeFormat("en")` after mount (avoiding a hydration mismatch), and
-  updates once a minute.
+  with `formatRelativeTime(reportedAt, Date.now())` after mount (avoiding a hydration
+  mismatch), and updates once a minute.
+- `formatRelativeTime(reportedAt, now)` in `src/lib/dates.ts` uses
+  `Intl.RelativeTimeFormat("en", { numeric: "auto" })` with whole units rounded down: under
+  a minute, or a `reportedAt` in the future (clock skew), gives `"just now"`; under an hour,
+  minutes; under a day, hours; otherwise days.
 - Falls back to "No recent reports" when the query returns null.
 - Trail cards get a small dot in the corner coloured by status. Extend `trailCardFragment`
   with `"condition": *[_type == "trailCondition" && trail._ref == ^._id] | order(reportedAt desc)[0].status`.
@@ -64,8 +68,32 @@ trailhead and every region page has a clustered map of its trails.
   bounds to all points with `maxZoom: 12`, so a region with one trail does not zoom to the
   maximum; with no trails it stays on `center` at zoom 10.
 - Geopoint values must pass through `stegaClean` before use.
+- The data the maps need comes from pure helpers in `src/lib/map.ts`, which imports
+  nothing from `maplibre-gl` (type-only imports aside):
+  - `googleMapsUrl({ lat, lng })` builds the "Open in Google Maps" link above.
+  - `trailFeatures(trails)` builds the GeoJSON `FeatureCollection` for `RegionMap`, with
+    coordinates in `[lng, lat]` order and `slug`, `name`, and `difficulty` as properties.
+  - `initialView(center, trails)` gives `{ center: [lng, lat], zoom: 10 }` when `trails`
+    is empty, otherwise `{ bounds: [[minLng, minLat], [maxLng, maxLat]], maxZoom: 12 }`.
 - The map container has a fixed 3:2 aspect ratio and a skeleton background so it does not
   shift layout while the library loads.
+
+### Unit tests
+
+Per Testing in `00-overview.md`. At least:
+
+- `src/lib/dates.test.ts` (added to phase 5's file), for `formatRelativeTime`:
+  - 30 seconds ago and 5 minutes in the future give `"just now"`.
+  - 5 minutes ago gives `"5 minutes ago"`; 59 minutes 59 seconds gives `"59 minutes ago"`.
+  - 60 minutes gives `"1 hour ago"`; 25 hours gives `"yesterday"`; 3 days gives `"3 days ago"`.
+- `src/lib/map.test.ts`
+  - `googleMapsUrl({ lat: 51.0839, lng: -115.3953 })` equals
+    `https://www.google.com/maps/search/?api=1&query=51.0839,-115.3953`.
+  - `trailFeatures` puts `lng` first in each point's coordinates and carries `slug`, `name`,
+    and `difficulty`.
+  - `initialView` with no trails gives the center at zoom 10; with one trail, bounds whose
+    min and max are that point; with three trails, the min and max of their coordinates,
+    and `maxZoom` 12 in both cases.
 
 ### Walkthrough
 
@@ -95,3 +123,5 @@ Add a "Walkthrough" section to the README covering each feature in order:
   `grep -rlE "maplibre-gl|maplibregl" .next/server --include='*.js' --exclude='*manifest*' | wc -l`
   prints `0`.
 - The hex and small-text greps in the `08-design-system.md` acceptance checks pass.
+- The checks under Testing in `00-overview.md` pass, and `pnpm test` runs `map.test.ts`, the
+  new `dates.test.ts` cases, and the test files of phases 1, 3, 4, and 5.

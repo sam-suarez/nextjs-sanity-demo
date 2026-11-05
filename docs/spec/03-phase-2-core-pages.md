@@ -171,3 +171,4 @@ holds fonts, `<SanityLive />`, and global CSS only.
   header with a non-empty `alt` (the mount and attribution caption arrive in phase 3).
 - `/` shows the four trails in `siteSettings.featuredTrails`, in that order.
 - The hex and small-text greps in the `08-design-system.md` acceptance checks pass.
+- The checks under Testing in `00-overview.md` pass. Phase 2 adds no required unit tests.
