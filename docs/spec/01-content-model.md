@@ -21,11 +21,11 @@ The core content type. One document per hike.
 | `routeType` | string | required, options: `out-and-back`, `loop`, `point-to-point` | |
 | `estimatedHours` | number | optional, positive | |
 | `trailhead` | geopoint | required | Lat/lng of the parking area |
-| `heroImage` | image with hotspot | required, with `alt` and `attribution` fields | See `imageWithMeta` object |
+| `heroImage` | `imageWithMeta` | required | Image with hotspot plus `alt` and attribution fields |
 | `summary` | text | required, max 240 chars | Used on cards and as meta description |
 | `body` | array of `block`, `callout`, `gallery` | required | See Portable Text section |
 | `highlights` | array of string | optional, max 5 | Short bullet points, e.g. "Larches in late September" |
-| `season` | object `{ from: string, to: string }` | optional | Month names, e.g. June to October |
+| `season` | object `{ from: string, to: string }` | optional | Each a month name from an options list `January`…`December`, e.g. June to October |
 | `dogsAllowed` | boolean | default true | On-leash is the rule in Kananaskis parks |
 | `featured` | boolean | default false | Shown on the home page |
 | `related` | array of reference → `trail` | optional, max 3, no self-reference | |
@@ -34,6 +34,9 @@ Preview: title `name`, subtitle `difficulty · distanceKm km`, media `heroImage`
 
 Orderings: by name, by distance, by elevation gain.
 
+Display labels for enum values on the site: difficulty "Easy", "Moderate", "Hard", "Scramble";
+route type "Out and back", "Loop", "Point to point".
+
 ### `region`
 
 A sub-area of Kananaskis Country. Trails reference a region; regions do not list trails.
@@ -41,7 +44,7 @@ A sub-area of Kananaskis Country. Trails reference a region; regions do not list
 | Field | Type | Rules | Notes |
 | --- | --- | --- | --- |
 | `name` | string | required | |
-| `slug` | slug | required, unique | |
+| `slug` | slug | required, source `name`, unique | |
 | `description` | text | required | Two or three sentences |
 | `heroImage` | `imageWithMeta` | required | |
 | `center` | geopoint | required | Initial map center for the region page |
@@ -77,7 +80,7 @@ these by hand, but can edit them.
 | `hikedOn` | date | required, not in the future | |
 | `rating` | number | required, integer 1–5 | |
 | `body` | text | required, 20–1000 chars | Plain text, not Portable Text |
-| `photos` | array of image | optional, max 3 | Uploaded by the server action |
+| `photos` | array of image | optional, max 3 | Uploaded by the server action. Plain images with no `alt`; the site derives alt text when rendering (phase 5) |
 | `status` | string | required, options: `pending`, `approved`, `rejected`, default `pending` | Read-only in the Studio; changed via document actions |
 | `submittedAt` | datetime | required, set by the server | |
 | `moderatedAt` | datetime | optional | Set by the approve/reject action |
@@ -88,20 +91,21 @@ Preview: title `authorName`, subtitle `status · trail name`, media first photo.
 
 Singleton. Exactly one document with `_id: "siteSettings"`.
 
-| Field | Type | Notes |
-| --- | --- | --- |
-| `title` | string | Site name, used in metadata |
-| `tagline` | string | Hero subtitle |
-| `heroImage` | `imageWithMeta` | Home page hero |
-| `intro` | array of `block` | Short paragraph under the hero |
-| `featuredTrails` | array of reference → `trail`, max 4 | Overrides the `featured` flag if set |
-| `footerNote` | text | Disclaimer about checking Alberta Parks before heading out |
+| Field | Type | Rules | Notes |
+| --- | --- | --- | --- |
+| `title` | string | required | Site name, used in metadata and the header |
+| `tagline` | string | required | Hero statement on the home page |
+| `heroImage` | `imageWithMeta` | required | Home page hero |
+| `intro` | array of `block` | optional | Short paragraph under the hero |
+| `featuredTrails` | array of reference → `trail` | optional, max 4 | Overrides the `featured` flag if set |
+| `footerNote` | text | optional | Disclaimer about checking Alberta Parks before heading out. The footer omits the closing statement when empty |
 
 ## Object types
 
 ### `imageWithMeta`
 
-An image with hotspot enabled plus two fields. Used wherever an image appears.
+An image with hotspot enabled plus three fields. Used wherever an editor-managed image
+appears (trip report photos are the one exception; see `tripReport`).
 
 | Field | Type | Rules |
 | --- | --- | --- |
@@ -140,7 +144,7 @@ The `body` field on `trail` and `accessNotes` on `region` use this configuration
 - Annotations:
   - `link` — `href` (url, required), `openInNewTab` (boolean).
   - `trailLink` — `trail` (reference → `trail`, required). Rendered as an internal link
-    with a small difficulty badge.
+    with the `Difficulty` symbol inline (see `08-design-system.md`, Portable Text).
 - Block members: `callout`, `gallery`.
 
 `siteSettings.intro` uses a reduced configuration: normal style, strong, em, and `link` only.
@@ -202,15 +206,31 @@ licence, and source URL in `attribution` and `attributionUrl`.
 | Prairie Mountain | Elbow Valley | hard | 7.0 | 700 | out-and-back | 50.90, -114.90 |
 | Heart Mountain | Bow Valley | scramble | 10.0 | 900 | loop | 51.05, -115.14 |
 
+Trail slugs are the name in lowercase with spaces replaced by hyphens (`grassi-lakes`,
+`upper-kananaskis-lake-circuit`). Document IDs are `trail-<slug>`.
+
 Regions:
 
-| Region | Center | Access note |
-| --- | --- | --- |
-| Canmore & Spray Valley | 50.90, -115.35 | Spray Lakes Road (Smith-Dorrien) is gravel; Kananaskis Conservation Pass required |
-| Kananaskis Valley | 50.95, -115.15 | Highway 40, Kananaskis Village area |
-| Peter Lougheed | 50.65, -115.10 | Highway 40 south of Kananaskis Lakes Trail; Highwood Pass closed Dec 1 to Jun 14 |
-| Elbow Valley | 50.90, -114.90 | Highway 66; winter gate closes beyond Elbow Falls Dec 1 to May 14 |
-| Bow Valley | 51.05, -115.10 | Trans-Canada Highway corridor near Exshaw and Lac des Arcs |
+| Region | Slug | Center | Access note |
+| --- | --- | --- | --- |
+| Canmore & Spray Valley | `canmore-spray-valley` | 50.90, -115.35 | Spray Lakes Road (Smith-Dorrien) is gravel; Kananaskis Conservation Pass required |
+| Kananaskis Valley | `kananaskis-valley` | 50.95, -115.15 | Highway 40, Kananaskis Village area |
+| Peter Lougheed | `peter-lougheed` | 50.65, -115.10 | Highway 40 south of Kananaskis Lakes Trail; Highwood Pass closed Dec 1 to Jun 14 |
+| Elbow Valley | `elbow-valley` | 50.90, -114.90 | Highway 66; winter gate closes beyond Elbow Falls Dec 1 to May 14 |
+| Bow Valley | `bow-valley` | 51.05, -115.10 | Trans-Canada Highway corridor near Exshaw and Lac des Arcs |
+
+Region document IDs are `region-<slug>`. Trail counts per region from the table above:
+Canmore & Spray Valley 5, Kananaskis Valley 1, Peter Lougheed 4, Elbow Valley 1, Bow Valley 1.
+
+Every seeded trail has, so phase 2 can be checked against real content:
+
+- a `body` with at least two paragraphs, one `callout`, one `gallery` of 2 or more images,
+  and one `trailLink` to another seeded trail;
+- 1 to 3 `related` trails;
+- `highlights` and `season` filled in.
 
 Seed also includes: one `trailCondition` per trail (most `open`, one `caution`, one `closed`),
-three approved and two pending `tripReport` documents, and the `siteSettings` singleton.
+three approved and two pending `tripReport` documents, and the `siteSettings` singleton with
+`title`, `tagline`, `heroImage`, `intro`, `footerNote`, and four `featuredTrails` drawn from
+at least three regions. The same four trails also have `featured: true` so the fallback in
+phase 2 shows the same set.

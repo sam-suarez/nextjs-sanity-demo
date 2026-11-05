@@ -28,18 +28,20 @@ actual routes, content model, and the Tailwind + shadcn/ui stack chosen in `00-o
 
 ## Conflicts with earlier phases
 
-Resolve these when the phases are built; the design spec takes precedence where noted.
+All resolved in the spec review of 2026-11-04 by editing the phase files in place. Listed
+here so the history is visible; the phase files are now consistent with this spec.
 
-- `07-phase-6-live-conditions-maps.md` asks for light and dark map styles that follow
-  `prefers-color-scheme`. **Change to:** always use the OpenFreeMap `liberty` style.
-  Drop the "Maps swap styles when the OS theme changes" acceptance check.
-- `02-phase-1-foundation.md` installs shadcn "with the default theme". **Change to:** run
-  `shadcn init` as written, then replace the generated `:root` variables in `globals.css`
-  with the mapping in this spec before building any page.
-- `03-phase-2-core-pages.md` says `DifficultyBadge` maps difficulty to "a shadcn `Badge`
-  variant". **Change to:** it renders the difficulty symbol plus a text label (see Components).
-- `04-phase-3-images-seo-filters.md` loads "one weight of a Google font" for OG images.
-  **Confirm:** that font is Permanent Marker, so share cards match the site.
+- **Resolved.** `07-phase-6-live-conditions-maps.md` asked for light and dark map styles that
+  follow `prefers-color-scheme`. It now always uses the OpenFreeMap `liberty` style, and the
+  "Maps swap styles when the OS theme changes" acceptance check is removed.
+- **Resolved.** `02-phase-1-foundation.md` installed shadcn "with the default theme". It now
+  runs `shadcn init`, then replaces the generated `:root` variables in `globals.css` with the
+  mapping in this spec (and deletes the generated `.dark` block) before building any page.
+- **Resolved.** `03-phase-2-core-pages.md` said `DifficultyBadge` maps difficulty to "a shadcn
+  `Badge` variant". It now renders the difficulty symbol plus a text label (see Components).
+- **Resolved.** `04-phase-3-images-seo-filters.md` loaded "one weight of a Google font" for OG
+  images. That font is now named as Permanent Marker, and its OG layout follows the Images
+  section of this spec (paper background, no dark gradient).
 
 ## Authoritative tokens
 
@@ -144,7 +146,10 @@ Tailwind v4 `@theme inline` block exposing the tokens as utilities:
 
 Rules:
 
-- Nothing below 21px. The hand face needs its size; do not use Tailwind `text-sm` or smaller anywhere in `(site)`.
+- Nothing below 21px. The hand face needs its size; do not use Tailwind `text-xs`, `text-sm`,
+  `text-base`, `text-lg`, or `text-xl` (all under 21px) anywhere in `(site)` or in the
+  `src/components/` files it renders. Strip them from generated shadcn components when
+  editing them. Use `text-detail`, `text-reading`, `text-body`, or a display size.
 - Paragraphs are never rotated. Rotation is reserved for a single heading, selected notes, photo mounts, and tape.
 - Headings get `text-wrap: balance`; reading text gets `text-wrap: pretty`.
 - Letter spacing stays at the font's default. Do not tighten.
@@ -249,7 +254,7 @@ in the reading face instead so it stays a sentence and not a wall of marker.
 
 **`/` Home**
 
-1. Opening split at `desk`: left, the tagline as the statement with one word underlined,
+1. Opening split at `desk`: left, the tagline as the statement with its last word underlined,
    `siteSettings.intro` beneath it as a cluster of reading-size notes, then the primary
    button "Browse trails" with an `Arrow` curving toward it and a secondary "Regions" button.
    Right, `siteSettings.heroImage` in a `PhotoMount` tilted 1.5° with a `MountainDoodle`
@@ -274,17 +279,19 @@ in the reading face instead so it stays a sentence and not a wall of marker.
 1. Header: region name as an annotation-blue link, `h1` name with an `Underline`,
    `DifficultyBadge` and route type on one line, then `summary` at reading size.
 2. Facts under a `Bracket`: distance, elevation gain, route type, estimated hours, season,
-   dogs. Two columns, one row at `sheet`. Values in the display face, labels at detail size.
+   dogs ("On leash" when `dogsAllowed` is true, "Not allowed" when false). Two columns, one
+   row at `sheet`. Values in the display face, labels at detail size.
    Omit facts whose field is empty; never show a dash.
 3. Condition banner (phase 6) directly under the facts. See Components.
 4. `heroImage` in a full-width `PhotoMount`, 3:2, tape at top centre, 0.5° tilt at `desk`,
    attribution caption at detail size.
 5. Body: Portable Text in the reading column. Galleries and callouts can break out to the
    container width.
-6. Highlights: `h3` and a list with `Check` marks.
+6. Highlights: `h3` and a list with `Check` marks. Omitted when `highlights` is empty.
 7. Map (phase 6) in a mount, then the "Open in Google Maps" link.
-8. Trip reports (phase 5): `h2`, "Write a report" primary button, then speech notes.
-9. Related trails: `h2` and up to three `TrailCard`s.
+8. Trip reports (phase 5): `h2`, "Write a report" primary button, then speech notes. With no
+   approved reports, the button is followed by "No trip reports yet." at reading size.
+9. Related trails: `h2` and up to three `TrailCard`s. Omitted when `related` is empty.
 
 **`/trails/[slug]/report`**
 
@@ -302,7 +309,9 @@ and trail count on the right. One column, two at `sheet`.
 
 **`/regions/[slug]`**
 
-Header like a trail page (name, description, no facts). `accessNotes` rendered as one
+Header like a trail page (name, description, no facts). Then `heroImage` with the same frame
+as the trail page hero: full-width `PhotoMount`, 3:2, tape at top centre, 0.5° tilt at
+`desk`, attribution caption at detail size. Then `accessNotes` rendered as one
 annotation note: scrap, annotation border, "Access" label in annotation blue. Then the
 cluster map in a mount, then the trail grid.
 
@@ -336,8 +345,9 @@ outline, offset 3px, on every variant. Transitions on `transform` and `box-shado
 `DifficultyBadge` renders `<Difficulty value>` at 18px beside a text label ("Easy",
 "Moderate", "Hard", "Scramble") in the reading face at detail size. Colours: easy
 pencil-green, moderate annotation, hard ink, scramble accent. The label is always visible;
-colour and shape are reinforcement, not the only cue. Used on cards, trail headers, filter
-toggles, and `trailLink` marks.
+colour and shape are reinforcement, not the only cue. Used on cards, trail headers, and filter
+toggles. `trailLink` marks use the bare `Difficulty` symbol inline (see Portable Text) with the
+label as visually hidden text, so the difficulty is still not conveyed by shape alone.
 
 Other badges (`routeType`, counts) are plain text with a thin ink outline and the control radius.
 
@@ -351,7 +361,8 @@ A card is a scrap note. `TrailCard`:
 - Region in annotation blue at detail size.
 - Stats line in the reading face: distance, gain, route type, with the `DifficultyBadge`.
 - Condition dot (phase 6): 12px circle, ink outline, fill by status, top-right of the
-  note, with visually hidden text "Trail open" / "Caution" / "Closed".
+  note, with visually hidden text "Trail open" / "Caution" / "Closed". No dot when the trail
+  has no condition document.
 - Hover at `desk`: rotate 0.6°, shadow compresses. Reduced motion: outline darkens instead.
 
 `RegionCard` is the same note with the photo on the left at `sheet` and the trail count as
@@ -382,10 +393,10 @@ brief's "yellow behind the featured choice"). "Clear filters" is a `link` button
 | `blockquote` | Outlined speech note: scrap, ink outline, note radius, a small drawn tail at bottom-left, reading size |
 | bullet list | Hand-drawn dash markers via `::marker` content "– " in ink |
 | number list | Default numerals in the reading face |
-| `strong` | The reading face has one weight; render as ink with a 2px highlight underline (`text-decoration-color: highlight`, thickness 6px, offset -4px) so emphasis reads as a highlighter stroke |
+| `strong` | The reading face has one weight; render as ink with a highlight underline (`text-decoration-color: highlight`, thickness 6px, offset -4px) so emphasis reads as a highlighter stroke |
 | `em` | Italic is synthesized; use annotation colour instead |
 | `link` | Ink, underlined, accent on hover, external icon when `openInNewTab` |
-| `trailLink` | Same as link plus the `Difficulty` symbol inline before the text |
+| `trailLink` | Same as link plus the `Difficulty` symbol inline before the text and the difficulty label as visually hidden text |
 | `callout` `info` | Annotation note: scrap, annotation border, `Info` icon from `lucide-react` in annotation |
 | `callout` `warning` | Highlight band: highlight background, no border, ink text, `TriangleAlert` icon |
 | `callout` `danger` | Accent outline 2px, note radius, title in display face accent, `OctagonAlert` icon |
@@ -416,7 +427,8 @@ Content swaps in place when the Live Content API pushes an update. No animation.
 - Each report is an outlined speech note: author name in the display face at `h3` size,
   "Hiked on {date}" at detail size, a row of five `Star`s with the filled count in accent
   and a visually hidden "4 out of 5", the body at reading size, then a strip of up to three
-  `PhotoMount`s at 1:1, tilted alternately.
+  `PhotoMount`s at 1:1, tilted alternately. Each photo is wrapped in a plain `<a>` to the
+  full-size image (same tab, no lightbox), with the dashed focus outline.
 - `TripReportForm`: one large scrap note holding the fields. Rating is a `fieldset` of five
   radio inputs; each label draws a `Star`, filled through the checked one, with the visible
   legend "Rating". Photos use a styled label around the file input: dashed ink outline,
@@ -439,9 +451,13 @@ animation is removed, not just disabled under reduced motion.
 
 ### Maps (phase 6)
 
-- The map container sits in a `PhotoMount` with `tilt={0}` and no tape; interactive
-  surfaces are never rotated.
+- The map container sits in a `PhotoMount` with `tilt={0}`, no tape, and `aspect="3/2"`;
+  interactive surfaces are never rotated.
 - Style: `liberty` always. The canvas is left in natural colour, like a photo.
+- Map paint colours (cluster fill and stroke, difficulty icons) are read at runtime from the
+  `--dp-color-*` custom properties with `getComputedStyle(document.documentElement)`, so map
+  code holds no hex values.
+- The attribution control is `compact` and its text is restyled to detail size (21px).
 - Trailhead marker: a DOM marker rendering `Pin` in accent at 36px.
 - Region map: cluster circles with scrap fill and ink stroke; single points use the
   difficulty colours. Popups are restyled through `.maplibregl-popup-content`: scrap,
@@ -459,6 +475,13 @@ OG images (`opengraph-image.tsx`): ground background, trail name in Permanent Ma
 ink, region in annotation at 32px, stats row in accent, and the hero photo on the right in a
 scrap mount with a tape rectangle, rotated 2°. Regions: name, trail count, photo. One font
 file, loaded at build.
+
+`ImageResponse` cannot read CSS custom properties, so OG files take their colours from
+`src/lib/og-tokens.ts`: a plain object mirroring the `--dp-color-*` hex values the cards use
+(ground, ink, annotation, accent, scrap, line, highlight; add pencil-green only if a card
+starts using it). It is the only file outside `globals.css` allowed to hold hex values, it
+is imported only by `opengraph-image.tsx` files, and it must be kept in sync with
+`globals.css`: change a token in both places or neither. A header comment in the file says so.
 
 ## Motion
 
@@ -511,11 +534,15 @@ Verify every state at 360px, 680px, and 1050px, not only at a desktop width.
 | 5 | `TripReportForm`, star rating, speech notes, process strip, toast |
 | 6 | Condition banner, card dot, map mount, `Pin`, popup styles |
 
+Each phase's acceptance includes the checks below that apply to what exists at the end of
+that phase.
+
 ## Acceptance checks
 
-- Every colour in `src/` resolves to a `--dp-*` token; `grep -rn "#[0-9a-f]\{6\}" src/` returns only `globals.css`.
+- Every colour in `src/` resolves to a `--dp-*` token; `grep -rniE "#[0-9a-f]{6}\b" src/ sanity/ --include='*.ts' --include='*.tsx' --include='*.css' | grep -v '^src/lib/og-tokens\.ts:'` returns only lines in `src/app/globals.css`. `src/lib/og-tokens.ts` is the single exempt file (see Images), and every hex value in it equals the matching `--dp-color-*` value in `globals.css`.
+- `grep -rnE "\btext-(xs|sm|base|lg|xl)\b" "src/app/(site)" src/components` returns nothing.
 - Both fonts load through `next/font`; no `@import` of Google Fonts CSS at runtime.
-- Keyboard tab order on the trail page reaches header, badges, map controls, "Write a report", every trip report photo link, related cards, and footer, with a visible dashed outline at each stop.
+- Keyboard tab order on the trail page reaches header, the region link, map controls, "Write a report", every trip report photo link (the plain `<a>` around each photo), related cards, and footer, with a visible dashed outline at each stop.
 - With `prefers-reduced-motion: reduce`, hovering a button changes outline and shadow but nothing moves.
 - At 360px no horizontal scroll on any route, and no text smaller than 21px (check with the device toolbar).
 - Difficulty is readable with colour removed (grayscale emulation) via its symbol and label.

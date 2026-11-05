@@ -3,12 +3,14 @@
 ## Goal
 
 The site looks finished. Images use Sanity's pipeline with hotspots and placeholders,
-every page has correct metadata and a generated share image, and the trail list can be
-filtered by region, difficulty, and distance.
+every page has correct metadata, trail and region pages have a generated share image, and
+the trail list can be filtered by region, difficulty, and distance.
 
 ## Deliverables
 
 - `SanityImage` component wrapping `next/image` with a Sanity loader.
+- `PhotoMount` wrapping `SanityImage`, and the rest of the phase 3 row of the
+  Implementation plan in `08-design-system.md`.
 - Low-quality image placeholders from asset metadata.
 - `generateMetadata` on every page; `sitemap.ts` and `robots.ts`.
 - `opengraph-image.tsx` for trails and regions.
@@ -19,39 +21,62 @@ filtered by region, difficulty, and distance.
 
 ### Images
 
-- `src/lib/sanity/image.ts` exports `urlFor(source)` from `@sanity/image-url`.
+- `urlFor(source)` in `src/lib/sanity/image.ts` exists from phase 2.
 - `src/components/sanity-image.tsx` takes an `imageWithMeta` value plus `width`,
   `height` or `aspectRatio`, and `sizes`. It builds a loader that calls
   `urlFor(image).width(w).auto("format").fit("crop")` so hotspot and crop apply at
-  every breakpoint. Alt comes from the image's `alt` field; attribution renders as a
-  small caption when `showAttribution` is set.
-- Queries that return images add `asset->{ _id, metadata { lqip, dimensions } }` to
-  the projection so `placeholder="blur"` and `blurDataURL={lqip}` work without an
-  extra request. Update `trailCardFragment` and the detail queries, then rerun TypeGen.
+  every breakpoint. Alt comes from the image's `alt` field; an optional `alt` prop
+  overrides it for plain images without one (trip report photos, phase 5). It renders the
+  image only.
+- `PhotoMount` (see `08-design-system.md`) wraps `SanityImage` and renders the attribution
+  caption under the mount at detail size when `showAttribution` is set.
+- Queries that return images project them as
+  `{ alt, attribution, attributionUrl, hotspot, crop, asset->{ _id, metadata { lqip, dimensions } } }`
+  so hotspot and crop reach `urlFor`, and `placeholder="blur"` and `blurDataURL={lqip}` work
+  without an extra request. Update `trailCardFragment`, `siteSettingsQuery`, `regionsQuery`,
+  and the detail queries (including gallery images in `body`), then rerun TypeGen.
 - Replace every `<img>` from phase 2, including the gallery block.
 - Add `cdn.sanity.io` to `images.remotePatterns` in `next.config.ts`.
 
 ### Metadata
 
-- Root layout: `metadataBase` from `NEXT_PUBLIC_SITE_URL`, default title template
-  `"%s · Trailhead"`, site name from `siteSettings`.
-- Trail page: title `name`, description `summary`, `openGraph.images` pointing at the
-  route's generated image. Same for region.
-- `src/app/sitemap.ts` lists static routes plus every trail and region URL with
-  `_updatedAt` as `lastModified`.
+- Root layout: `metadataBase` from `NEXT_PUBLIC_SITE_URL`, title template
+  `"%s · <siteSettings.title>"` with `siteSettings.title` as the default title, and
+  `openGraph.siteName` from `siteSettings.title`. Description defaults to
+  `siteSettings.tagline`.
+- Page titles: `/` uses the default title; `/trails` "Trails"; `/regions` "Regions";
+  trail pages `name`; region pages `name`; report pages "Report on <trail name>".
+- Trail page description `summary`; region page description `description`. Other pages
+  use the default description.
+- `og:image` on trail and region pages comes from the route's `opengraph-image` file
+  (file-based metadata); `generateMetadata` does not set `openGraph.images` itself.
+- `src/app/sitemap.ts` lists `/`, `/trails`, `/regions`, plus every trail and region URL
+  with `_updatedAt` as `lastModified`, as absolute URLs on `NEXT_PUBLIC_SITE_URL`. Report
+  pages are not listed. Add a `sitemapQuery` returning `slug` and `_updatedAt` for both types.
 - `src/app/robots.ts` allows everything except `/studio` and `/api`.
 
 ### OG images
 
-`src/app/(site)/trails/[slug]/opengraph-image.tsx` uses `ImageResponse` from `next/og`:
+`src/app/(site)/trails/[slug]/opengraph-image.tsx` uses `ImageResponse` from `next/og`.
+The layout follows the OG paragraph in the Images section of `08-design-system.md`:
 
-- 1200×630. Hero image as background via a direct `urlFor(...).width(1200).height(630).url()`
-  string, dark gradient overlay, trail name, region, and a stats row (distance, gain,
-  difficulty).
-- Fonts: load one weight of a Google font at build time with `fetch` and pass it to
-  `ImageResponse`. Keep it to one font file to stay under the size limit.
+- 1200×630, ground background (no photo background, no gradient). Trail name in Permanent
+  Marker at 72px in ink, region in annotation at 32px, and a stats row in accent
+  (distance, gain, difficulty label).
+- Hero photo on the right in a scrap mount with a tape rectangle, rotated 2°. The photo is
+  a direct `urlFor(heroImage).width(520).height(390).fit("crop").url()` string so the
+  hotspot applies.
+- Font: load Permanent Marker (its one weight) at build time with `fetch` and pass it to
+  `ImageResponse`. One font file only, to stay under the size limit; text that would use
+  the reading face is set in Permanent Marker too.
 - Export `generateStaticParams` identical to the page so images prerender.
-- Regions get a simpler variant: hero, name, trail count.
+- `src/app/(site)/regions/[slug]/opengraph-image.tsx` is the simpler variant: name, trail
+  count, photo.
+- `ImageResponse` cannot read CSS custom properties, so both OG files import their colours
+  from `src/lib/og-tokens.ts`, created in this phase as described in the Images section of
+  `08-design-system.md`. It mirrors the `--dp-color-*` hex values the cards use, is the one
+  file exempt from the "no hex outside `globals.css`" rule, and must stay in sync with
+  `globals.css`. The OG files themselves contain no hex.
 
 ### Filters
 
@@ -62,17 +87,34 @@ Search params on `/trails`:
 | `region` | region slug | `region->slug.current == $region` |
 | `difficulty` | one or more, comma separated | `difficulty in $difficulties` |
 | `maxKm` | number | `distanceKm <= $maxKm` |
-| `sort` | `name`, `distance`, `gain` | `order(...)` chosen in code from an allowlist |
+| `sort` | `name` (default), `distance`, `gain` | `order(...)` chosen in code from an allowlist |
 
-`trailsQuery` becomes a function that builds the filter string from validated params.
+Queries stay static strings so TypeGen can type them (a query built at runtime cannot be
+typed). The filter is one fragment with optional params, passed as `null` when unset:
+
+```groq
+_type == "trail"
+  && (!defined($region) || region->slug.current == $region)
+  && (!defined($difficulties) || difficulty in $difficulties)
+  && (!defined($maxKm) || distanceKm <= $maxKm)
+```
+
+`trailsQuery` uses it with `order(name asc)`; `trailsByDistanceQuery` with
+`order(distanceKm asc)` and `trailsByGainQuery` with `order(elevationGainM asc)`, each a
+`defineQuery` with the same `${trailCardFragment}` projection. The `sort` param picks one
+of the three from an allowlist in code.
+
 Only the four known params are read; everything else is ignored. Parse with a small
-Zod schema in `src/lib/trail-filters.ts` that also exports `toSearchParams` for the UI.
+Zod schema in `src/lib/trail-filters.ts` (`pnpm add zod`) that also exports
+`toSearchParams` for the UI. `difficulty` values outside the four enum values and a
+non-positive `maxKm` are dropped, not errors.
 
 UI:
 
-- `FilterBar` is a client component. Region `Select`, difficulty toggle group, distance
-  `Select` with preset steps (5, 10, 15, 20 km), sort `Select`. Each change calls
-  `router.replace` with new search params and `scroll: false`.
+- `FilterBar` is a client component. Region `Select` (options from `regionsQuery`, slugs
+  through `stegaClean`), difficulty toggles as `button[aria-pressed]` (see FilterBar in
+  `08-design-system.md`), distance `Select` with "Any" plus preset steps (5, 10, 15, 20 km),
+  sort `Select`. Each change calls `router.replace` with new search params and `scroll: false`.
 - The page reads `searchParams` (await it; it is a promise in current Next.js), passes
   them to `<TrailResults>` which is an async server component inside `<Suspense>` keyed
   on the serialised params so a new filter shows the skeleton while streaming.
@@ -85,11 +127,29 @@ cache still applies per unique query, so repeated filters are cheap.
 
 ## Acceptance checks
 
-- Lighthouse on a trail page scores 90+ on performance with no CLS from images.
-- Changing a hotspot in the Studio changes the crop on cards after revalidation
-  (manual rebuild for now; automatic in phase 4).
-- Pasting a trail URL into a social preview debugger shows the generated card.
-- `/sitemap.xml` lists every trail and region.
-- Filtering by `hard` in Peter Lougheed returns the expected set; an impossible
-  combination shows the empty state. The URL is shareable and reproduces the filters.
-- Navigating between filters shows the skeleton, not a blank page.
+Run against `pnpm build && pnpm start` unless stated. Expected trail sets assume the seed
+table in `01-content-model.md` as verified in phase 1.
+
+- Lighthouse (Chrome DevTools, mobile, navigation mode) on `/trails/grassi-lakes`:
+  Performance 90 or higher, and no `img` element listed under "Avoid large layout shifts".
+- Move the hotspot on Grassi Lakes' hero image in the Studio and publish, then run
+  `rm -rf .next && pnpm build && pnpm start` (clearing the fetch cache): the card on
+  `/trails` is cropped around the new hotspot
+  (automatic revalidation arrives in phase 4).
+- `curl -s http://localhost:3000/trails/grassi-lakes | grep -o '<meta property="og:image"[^>]*>'`
+  prints a tag whose `content` contains `/trails/grassi-lakes/opengraph-image`. Requesting
+  that URL returns `content-type: image/png`, and the image matches the 08 OG treatment.
+  The same holds for `/regions/peter-lougheed`.
+- `curl -s http://localhost:3000/sitemap.xml | grep -c "<loc>"` prints `20` (3 static
+  routes, 12 trails, 5 regions).
+- `/trails?region=peter-lougheed&difficulty=moderate` lists exactly Ptarmigan Cirque,
+  Rawson Lake, and Upper Kananaskis Lake Circuit, with the count "3 trails".
+  `/trails?region=peter-lougheed&difficulty=hard` shows the empty state. Opening either URL
+  in a new tab reproduces the same filters in the `FilterBar` and the same results.
+- `/trails?sort=distance` lists Elbow Lake first and Upper Kananaskis Lake Circuit last.
+  `/trails?foo=bar&difficulty=nope` lists all 12 trails.
+- With DevTools network throttling at "Slow 4G", toggling a difficulty filter shows the
+  skeleton grid before the new results appear, never a blank area.
+- The hex and small-text greps in the `08-design-system.md` acceptance checks pass (the hex
+  grep exempts exactly `src/lib/og-tokens.ts`), and each hex value in `og-tokens.ts` equals
+  the matching `--dp-color-*` value in `src/app/globals.css`.

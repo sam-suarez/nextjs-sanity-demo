@@ -13,16 +13,17 @@ produced it, and publishing updates the static site within seconds without a reb
 - `/api/revalidate` webhook handler and a configured Sanity webhook.
 - Tag-based revalidation wired through every `sanityFetch` call.
 - A draft-mode banner on the site with an exit link.
+- The site deployed to Vercel (first deployment; the webhook needs a public URL).
 
 ## Implementation notes
 
 ### Draft mode
 
 - `src/app/api/draft-mode/enable/route.ts` uses `defineEnableDraftMode` from
-  `next-sanity/draft-mode` with a client that carries `SANITY_API_READ_TOKEN`. It
-  validates the secret the Presentation tool sends and calls `draftMode().enable()`.
-- `src/app/api/draft-mode/disable/route.ts` calls `draftMode().disable()` and redirects
-  to the referrer or `/`.
+  `next-sanity/draft-mode` with a client that carries `SANITY_API_READ_TOKEN`. The helper
+  validates the secret the Presentation tool sends and enables draft mode.
+- `src/app/api/draft-mode/disable/route.ts` calls `(await draftMode()).disable()` and
+  redirects to the referrer or `/`.
 - `sanityFetch` already switches to `previewDrafts` perspective and disables the CDN
   when draft mode is on. No page changes needed.
 
@@ -30,10 +31,11 @@ produced it, and publishing updates the static site within seconds without a reb
 
 - In the root layout, after `<SanityLive />`, render
   `{(await draftMode()).isEnabled && <VisualEditing />}` from `next-sanity/visual-editing`.
-- Stega encoding is already on in the client config from phase 2. Values that must not
-  carry stega characters (anything used in logic, `href`, `className`, dates) go through
-  `stegaClean` from `@sanity/client/stega`. Audit: `difficulty`, `routeType`, `status`,
-  slugs, geopoints, and the filter builder.
+- Stega encoding is already on in the client config from phase 2, and phases 2 and 3
+  already pass logic values through `stegaClean`. Values that must not carry stega
+  characters (anything used in logic, `href`, `className`, dates) go through `stegaClean`
+  from `@sanity/client/stega`. Audit and fix any misses: `difficulty`, `routeType`,
+  `status`, slugs, geopoints, and the filter builder's region options.
 - `DraftModeBanner` client component: fixed bar reading "Viewing drafts" with a link to
   `/api/draft-mode/disable`. Rendered from the site layout when draft mode is on.
 
@@ -66,11 +68,12 @@ Move the Presentation tool first in the plugin list so it is the default Studio 
 - `src/app/api/revalidate/route.ts` uses `parseBody` from `next-sanity/webhook` to
   verify the signature against `SANITY_REVALIDATE_SECRET`. It expects a body of
   `{ _type, slug }` and calls:
-  - `revalidateTag(_type)` always.
-  - `revalidateTag(`${_type}:${slug}`)` when a slug is present.
-  - For `trailCondition` and `tripReport`, it reads the referenced trail slug from the
-    projection and revalidates `trail:<slug>` as well.
-  - For `siteSettings`, `revalidateTag("siteSettings")`.
+  - `revalidateTag(_type)` always (for `siteSettings` this is `"siteSettings"`).
+  - For `trail` and `region`, `revalidateTag(`${_type}:${slug}`)` when a slug is present.
+  - For `trailCondition` and `tripReport`, `slug` is the referenced trail's slug (see the
+    projection below), so it revalidates `trail:<slug>`.
+  - Responds 401 when the signature is invalid, 400 when `_type` is missing, and 200 with
+    the list of revalidated tags otherwise.
 - Create the webhook in the Sanity project management UI (or with the CLI) with:
   - URL `https://<site>/api/revalidate`
   - Trigger on create, update, delete
@@ -79,27 +82,36 @@ Move the Presentation tool first in the plugin list so it is the default Studio 
   - Secret equal to `SANITY_REVALIDATE_SECRET`
 - Document the webhook config in the README so it can be recreated.
 
+### Deployment
+
+These are human steps; agents never push or touch dashboards.
+
+- Create a Vercel project linked to the repository and deploy `main`.
+- Set every variable from the overview in Vercel, with `NEXT_PUBLIC_SITE_URL` set to the
+  deployed origin.
+- Add the deployed origin as a CORS origin with credentials in the Sanity project settings,
+  so the embedded Studio works there.
+- Create the Viewer read token and the webhook secret, then the webhook above.
+
 ### Tags audit
 
-Every `sanityFetch` call from phase 2 and 3 already passes tags. Confirm the matrix:
-
-| Page | Tags |
-| --- | --- |
-| `/` | `siteSettings`, `trail`, `region` |
-| `/trails` | `trail` |
-| `/trails/[slug]` | `trail`, `trail:<slug>`, `region` |
-| `/regions` | `region`, `trail` |
-| `/regions/[slug]` | `region`, `region:<slug>`, `trail` |
-| sitemap | `trail`, `region` |
+Every `sanityFetch` call from phase 2 and 3 already passes tags. Confirm each call matches
+the tag matrix in `03-phase-2-core-pages.md` (Pages section) and fix any that do not.
 
 ## Acceptance checks
 
-- Opening a trail in the Presentation tool shows the live site in the right pane; clicking
-  a heading on the site focuses the matching field in the editor.
-- Editing the summary in the Studio updates the preview within a second without publishing.
-- Visiting the public site in a normal browser shows no draft content and no stega
-  characters in `href` attributes or data attributes.
-- Publishing a change to a trail updates its page on the deployed site within a few
-  seconds, visible in the Vercel function logs as a revalidate call.
-- A request to `/api/revalidate` with a bad signature returns 401.
-- The draft banner appears only in draft mode and its exit link works.
+- Opening the Grassi Lakes trail in the Presentation tool shows the site in the preview
+  pane; clicking the trail name `h1` in the preview focuses the `name` field in the editor.
+- Editing the summary in the Studio updates the preview within two seconds without publishing.
+- `curl -s https://<site>/trails/grassi-lakes | perl -CS -ne 'print if /[\x{200B}-\x{200D}\x{FEFF}]/' | wc -l`
+  prints `0`, and the page shows no draft-only edits.
+- In the Presentation preview (draft mode on), running
+  `[...document.querySelectorAll('a[href]')].filter(a => /[​-‍﻿]/.test(a.getAttribute('href'))).length`
+  in the DevTools console of the preview frame returns `0`.
+- Publishing a change to a trail's summary updates its page on the deployed site within
+  10 seconds on reload, and the Vercel function logs show a 200 `POST /api/revalidate`.
+- `curl -s -o /dev/null -w "%{http_code}" -X POST -H "sanity-webhook-signature: bad" -d '{"_type":"trail"}' https://<site>/api/revalidate`
+  prints `401`.
+- The draft banner is absent on the public site, present in the Presentation preview, and
+  its "Exit" link returns to the page with draft mode off (banner gone).
+- The hex and small-text greps in the `08-design-system.md` acceptance checks pass.
